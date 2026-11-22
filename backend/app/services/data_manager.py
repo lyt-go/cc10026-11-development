@@ -218,6 +218,44 @@ def archive_audit_records(before_date: str) -> dict[str, Any]:
     return archive_data
 
 
+# ========== 审计分发数据包 ==========
+
+
+def _package_dir(request_no: str) -> Path:
+    # 请求号来自业务数据，目录名用哈希兜底，避免路径分隔符污染落盘位置。
+    safe = "".join(ch for ch in str(request_no) if ch.isalnum() or ch in "-_")[:80]
+    if not safe:
+        safe = "req_" + str(abs(hash(str(request_no))))[:12]
+    return DATA_ROOT / "distribution" / safe
+
+
+def write_distribution_package(request_no: str, subscription_id: int,
+                               package: dict[str, Any]) -> None:
+    """按请求号 + 订阅落盘审计分发数据包，供复核与重发追溯。"""
+    payload = dict(package)
+    payload["_written_at"] = _now_iso()
+    _write_json(
+        _package_dir(request_no) / f"sub_{int(subscription_id):06d}.json", payload)
+
+
+def read_distribution_package(request_no: str, subscription_id: int) -> dict[str, Any]:
+    return _read_json(
+        _package_dir(request_no) / f"sub_{int(subscription_id):06d}.json", {})
+
+
+def list_distribution_packages(request_no: str | None = None) -> list[dict[str, Any]]:
+    """列出已发放的数据包；给出请求号时只看该请求。"""
+    root = _package_dir(request_no) if request_no else DATA_ROOT / "distribution"
+    if not root.exists():
+        return []
+    records = []
+    for f in sorted(root.glob("**/sub_*.json")):
+        record = _read_json(f)
+        if record:
+            records.append(record)
+    return records
+
+
 # ========== 导出任务 ==========
 
 

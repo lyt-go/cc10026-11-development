@@ -20,6 +20,7 @@ from app.services.call_audit import CallAuditService
 from app.services.version_compat import VersionCompatService
 from app.services.batch_query import BatchQueryService
 from app.services.sdk_config import SdkConfigService
+from app.services.audit_distribution import AuditDistributionService
 
 SERVICES: dict[str, BaseModuleService] = {
     "api_registry": ApiRegistryService(),
@@ -41,6 +42,10 @@ SERVICES: dict[str, BaseModuleService] = {
     "batch_query": BatchQueryService(),
     "sdk_config": SdkConfigService(),
 }
+
+# 审计分发不是独立业务对象，而是跨 call_audit / subscription / usage_billing
+# 的交付能力，单独暴露给分发路由使用。
+audit_distribution = AuditDistributionService()
 
 
 def service_for(module: str) -> BaseModuleService | None:

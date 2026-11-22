@@ -64,10 +64,40 @@ npm run dev
 | 异常归类 | `error_classify` | 异常类型 | 类型编号、类型名称、错误码段 |
 | 数据归并 | `data_merge` | 归并规则 | 规则编号、主API、从API |
 | 导出任务 | `export_task` | 导出任务 | 任务编号、关联API、查询参数 |
-| 调用审计 | `call_audit` | 调用记录 | 记录编号、调用方、目标API |
+| 调用审计 | `call_audit` | 调用记录 | 记录编号、请求号、调用方、目标API |
 | 版本兼容 | `version_compat` | 版本映射 | 映射编号、关联API、旧版本 |
 | 批量查询 | `batch_query` | 批量任务 | 任务编号、关联API、查询清单 |
 | SDK配置 | `sdk_config` | SDK配置 | 配置编号、关联API、SDK语言 |
+
+## 审计分发
+
+`审计分发`（`/audit-distribution`）把已校验的调用审计明细按收件方的订阅范围转成复核数据包：
+
+- **分发前核对权限**：逐订阅检查审批状态、目标API、有效期、范围确认、审计校验状态，
+  不满足的收件方直接拒发，不给任何字段。
+- **共享字段与受控字段分开交付**：请求号、返回行数、目标API、响应码、时间戳等公共对账列
+  对所有匹配订阅一致；订阅声明的专有业务字段只进入该收件方的数据包。
+- **按已确认范围脱敏**：订阅上配置的脱敏算法在组装数据包时执行，交付前再做跨订阅串字段检查。
+- **公共数字能回到请求**：每个数据包带 `reconciliation`，用请求号关联 `usage_billing`
+  的用量行数，直接给出返回行数与计费用的差值。
+- **重发按请求号回源**：重发从 `data/distribution/` 读回首次发放记录，按请求号回到原始审计明细，
+  沿用首次的收件方与字段范围，并在 `source_drift` 标出返回行数或审计 ID 是否漂移。
+- **双订阅对照**：`compare` 用两份范围部分重叠的订阅取同一条请求，返回共同列、各自独有列、
+  行数与隔离检查结果。
+
+接口（`backend/app/routers/distribution.py`）：
+
+```text
+GET  /api/audit-distribution/audits/{audit_id}/permissions
+POST /api/audit-distribution/packages                 {audit_id, subscription_ids?, dry_run?}
+GET  /api/audit-distribution/packages/{request_no}/{subscription_id}
+POST /api/audit-distribution/packages/{request_no}/{subscription_id}/reissue
+POST /api/audit-distribution/compare                  {request_no, subscription_ids:[a,b]}
+```
+
+示例数据里 `REQ-20260902-0002` 同时涉及订阅 `SUBS-0004`（风控复核组，专有字段「客户等级」）
+和 `SUBS-0005`（结算复核组，专有字段「订单金额/结算批次」），`SUBS-0006` 待审批用于验证拒发。
+
 
 ## 约定
 
